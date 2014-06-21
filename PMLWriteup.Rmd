@@ -1,0 +1,100 @@
+# Machine Learning
+### Weight Lifting Prediction Using Accelerometer Data
+
+
+## Executive Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.
+
+## Data Processing
+
+Data for this project come from thttp://groupware.les.inf.puc-rio.br/har. We Load both datasets.
+```{r, eval=TRUE, echo=TRUE}
+raw_training <- read.csv('pmltraining.csv')
+raw_testing <- read.csv('pmltesting.csv')
+```
+
+
+## Steps 
+1. Set Aside validation Sets.
+2. Remove indicators with near zero variance.
+3. Eliminate highly correlated predictors.
+4. Impute missing values.
+5. Build Random Forest Model
+6. Perform Cross Validation
+7. Perform Confusion Matrix
+8. Test Prediction Results
+
+#### Set Aside Validation Sets
+We do this by partitioning our data to two, training and validation set.
+
+```{r, eval=TRUE, warning=FALSE, comment="", echo=FALSE}
+library(caret)
+set.seed(1234)
+trainingIndex <- createDataPartition(raw_training$classe, list=FALSE, p=.9)
+training = raw_training[trainingIndex,]
+testing = raw_training[-trainingIndex,]
+```
+
+#### Remove indicators with near zero variance.
+These are uninformative predictors in our dataset
+```{r, eval=TRUE}
+library(caret)
+nzv <- nearZeroVar(training)
+
+training <- training[-nzv]
+testing <- testing[-nzv]
+raw_testing <- raw_testing[-nzv]
+```
+
+#### Impute Missing Values
+We convert our column to numeric type for better prediction and impute missing values. This will help us avid miscalculation.
+
+```{r, eval=TRUE}
+num_features_idx = which(lapply(training,class) %in% c('numeric')  )
+```
+
+We then would like to impute missing values as many exist in our training data.
+
+```{r, eval=TRUE}
+preModel <- preProcess(training[,num_features_idx], method=c('knnImpute'))
+ptraining <- cbind(training$classe, predict(preModel, training[,num_features_idx]))
+ptesting <- cbind(testing$classe, predict(preModel, testing[,num_features_idx]))
+prtesting <- predict(preModel, raw_testing[,num_features_idx])
+names(ptraining)[1] <- 'classe'
+names(ptesting)[1] <- 'classe'
+```
+
+## Build Random Forest Model
+We build a random forest model from our data to get good prediction accuracy. 
+```{r, eval=TRUE}
+library(randomForest)
+rf_model  <- randomForest(classe ~ ., ptraining, ntree=500, mtry=32)
+```
+
+## Perform Cross Validation
+This step will help us determine if we have variance due to overfitting.
+### In-sample accuracy
+```{r, eval=TRUE}
+training_pred <- predict(rf_model, ptraining) 
+print(confusionMatrix(training_pred, ptraining$classe))
+```
+Table indicates an accuracy of 1.0 and does not suffer from bias.
+### Out-of-sample accuracy
+```{r}
+testing_pred <- predict(rf_model, ptesting) 
+```
+Confusion Matrix: 
+```{r}
+print(confusionMatrix(testing_pred, ptesting$classe))
+```
+Confusion Matrix table indicates an accuracy greater than 0.99 or 99%.
+
+## Test Prediction Results.
+```{r, echo=FALSE, eval=TRUE}
+answers <- predict(rf_model, prtesting) 
+answers
+```
+
+## Conclusion
+Our model has shown low out of sample and in sample error. We provide a very good prediction of weight lifting style as measured with accelerometers.
+
